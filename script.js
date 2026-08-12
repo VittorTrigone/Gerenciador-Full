@@ -456,6 +456,9 @@ btnGenerateExcel.addEventListener('click', async () => {
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             
+            // Pula as linhas que estão ocultas (filtradas) no Excel
+            if (row.hidden) continue;
+
             // Pega os valores das células
             let idValue = row.getCell(idColIndex).value;
             let qtyValue = row.getCell(qtyColIndex).value;
