@@ -429,13 +429,36 @@ btnGenerateExcel.addEventListener('click', async () => {
         resultadosProcessados = [];
         const naoCadastrados = [];
 
-        // O usuário especificou: ID na coluna E (5), Quantidade na coluna T (20), da linha 2 em diante.
+        // 1. Procurar as colunas corretas lendo o cabeçalho (linha 1)
+        const headerRow = worksheet.getRow(1);
+        let idColIndex = -1;
+        let qtyColIndex = -1;
+
+        headerRow.eachCell((cell, colNumber) => {
+            if (cell.value) {
+                const headerText = String(cell.value).toLowerCase();
+                // Procurar por variações do nome do SKU
+                if (headerText.includes('warehouse sku') || headerText.includes('mt sku id')) {
+                    idColIndex = colNumber;
+                }
+                // Procurar por variações da quantidade
+                if (headerText.includes('iremos mandar')) {
+                    qtyColIndex = colNumber;
+                }
+            }
+        });
+
+        // Fallback de segurança para caso a planilha não tenha os nomes exatos
+        if (idColIndex === -1) idColIndex = 5;
+        if (qtyColIndex === -1) qtyColIndex = 20;
+
+        // 2. Extrair os dados usando os índices encontrados
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             
             // Pega os valores das células
-            let idValue = row.getCell(5).value;
-            let qtyValue = row.getCell(20).value;
+            let idValue = row.getCell(idColIndex).value;
+            let qtyValue = row.getCell(qtyColIndex).value;
             
             if (!idValue) continue; // Pula linhas vazias
             
