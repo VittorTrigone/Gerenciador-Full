@@ -453,23 +453,31 @@ btnGenerateExcel.addEventListener('click', async () => {
         if (qtyColIndex === -1) qtyColIndex = 20;
 
         // 2. Extrair os dados usando os índices encontrados
+        const extractValue = (val) => {
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'object') {
+                if (val.result !== undefined) return val.result;
+                if (val.richText) return val.richText.map(rt => rt.text).join('');
+                if (val.text !== undefined) return val.text;
+                return '';
+            }
+            return val;
+        };
+
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             
             // Pula as linhas que estão ocultas (filtradas) no Excel
             if (row.hidden) continue;
 
-            // Pega os valores das células
-            let idValue = row.getCell(idColIndex).value;
-            let qtyValue = row.getCell(qtyColIndex).value;
+            // Pega os valores das células, extraindo o resultado caso seja uma fórmula
+            let idValue = extractValue(row.getCell(idColIndex).value);
+            let qtyValue = extractValue(row.getCell(qtyColIndex).value);
             
-            if (!idValue) continue; // Pula linhas vazias
+            let id = String(idValue).trim();
+            // Pula se estiver vazio ou se for um erro do Excel como #N/D
+            if (!id || id === '#N/D' || id === '#N/A') continue; 
             
-            // ExcelJS pode retornar um objeto richText para texto formatado
-            let id = typeof idValue === 'object' ? (idValue.richText ? idValue.richText.map(rt => rt.text).join('') : idValue.text || String(idValue)) : String(idValue);
-            id = id.trim();
-            if (!id) continue;
-
             // Extrai a quantidade (pode vir como número ou string)
             let qtd = parseInt(qtyValue);
             if (isNaN(qtd) || qtd <= 0) continue; // Pula se não tiver quantidade válida
