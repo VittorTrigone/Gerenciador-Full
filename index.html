@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador Full</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class='bx bx-box'></i>
+                <h1>Gerenciador <span>Full</span></h1>
+            </div>
+            <nav class="tabs">
+                <button class="tab-btn active" data-tab="generator"><i class='bx bx-list-check'></i> Gerador de Planilha</button>
+                <button class="tab-btn" data-tab="impressor"><i class='bx bx-printer'></i> Imprimir Volumes</button>
+                <button class="tab-btn" data-tab="imprimir-produtos"><i class='bx bx-purchase-tag'></i> Imprimir Produtos</button>
+                <button class="tab-btn" data-tab="config"><i class='bx bx-cog'></i> Configurações</button>
+            </nav>
+        </header>
+
+        <main class="app-content">
+            <!-- TAB: Gerador de Planilha -->
+            <section id="generator" class="tab-content active">
+                <div class="header-section">
+                    <h2>Gerador de Planilha de Envio</h2>
+                    <p>Cole abaixo a lista completa do Full Shopee para extrair automaticamente as informações.</p>
+                </div>
+                
+                <div class="glass-card" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap;">
+                        
+                        <!-- Método 1 -->
+                        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 10px; color: var(--primary);">Método 1: Colar Texto</h4>
+                            <textarea id="shopee-input" placeholder="Cole os dados aqui... (ex: Max_Innovar120_PR...)" style="flex: 1; margin-bottom: 10px; min-height: 120px;"></textarea>
+                            <button id="btn-generate" class="btn-primary">
+                                <i class='bx bx-bolt-circle'></i> Gerar Planilha do Texto
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--text-muted); font-size: 1.2rem;">
+                            OU
+                        </div>
+                        
+                        <!-- Método 2 -->
+                        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 10px; color: var(--secondary);">Método 2: Planilha Murilo</h4>
+                            <div style="flex: 1; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; margin-bottom: 10px; background: rgba(0,0,0,0.2);">
+                                <i class='bx bx-upload' style="font-size: 2rem; color: var(--secondary); margin-bottom: 10px;"></i>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Selecione a planilha do Full (.xlsx)</p>
+                                <input type="file" id="excel-upload" accept=".xlsx, .xls" style="max-width: 100%; font-size: 0.9rem; color: #fff;">
+                            </div>
+                            <button id="btn-generate-excel" class="btn-primary" style="background: var(--secondary);">
+                                <i class='bx bx-file'></i> Processar Planilha Importada
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--text-muted); font-size: 1.2rem; padding: 0 10px;">
+                            OU
+                        </div>
+
+                        <!-- Método 3 -->
+                        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 10px; color: #f59e0b;">Método 3: NFe ou ASN (PDF/ZIP)</h4>
+                            <div style="flex: 1; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; margin-bottom: 10px; background: rgba(0,0,0,0.2);">
+                                <i class='bx bx-archive-in' style="font-size: 2rem; color: #f59e0b; margin-bottom: 10px;"></i>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Selecione o Inbound (PDF ou ZIP)</p>
+                                <input type="file" id="inbound-generator-upload" accept=".pdf, .zip" style="max-width: 100%; font-size: 0.9rem; color: #fff;">
+                            </div>
+                            <button id="btn-generate-inbound" class="btn-primary" style="background: #f59e0b;">
+                                <i class='bx bx-list-ol'></i> Processar Inbound
+                            </button>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <!-- ALERTA DE ITENS NÃO CADASTRADOS -->
+                <div id="missing-skus-alert" class="glass-card" style="display: none; background: rgba(245, 61, 45, 0.1); border-left: 4px solid var(--primary); margin-bottom: 20px;">
+                    <h4 style="color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;"><i class='bx bx-error'></i> Atenção: Itens não cadastrados detectados!</h4>
+                    <p style="font-size: 0.9rem; margin-bottom: 10px;">Os seguintes SKUs foram processados, mas não possuem um cadastro nas suas configurações. Eles foram adicionados à planilha com quantidade de caixa igual a 1 (favor conferir os volumes):</p>
+                    <ul id="missing-skus-list" style="margin-left: 20px; font-size: 0.85rem; color: var(--text-muted);"></ul>
+                </div>
+
+                <div id="results-container" class="glass-card result-card" style="display: none;">
+                    <div class="result-header">
+                        <h3>Planilha Gerada</h3>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                            <button id="btn-download" class="btn-primary">
+                                <i class='bx bx-download'></i> Baixar Planilha (Excel)
+                            </button>
+                            <button id="btn-print-direct" class="btn-primary" style="background: #10b981;">
+                                <i class='bx bx-fast-forward'></i> Ir para Impressão
+                            </button>
+                            <button id="btn-print-paper" class="btn-secondary" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border);">
+                                <i class='bx bx-printer'></i> Imprimir Tabela
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="result-table">
+                            <thead>
+                                <tr>
+                                    <th>Item <i class='bx bx-filter-alt'></i></th>
+                                    <th>Confere <i class='bx bx-filter-alt'></i></th>
+                                    <th>Quem Fez? <i class='bx bx-filter-alt'></i></th>
+                                    <th>Quantidade <i class='bx bx-filter-alt'></i></th>
+                                    <th>Caixas <i class='bx bx-filter-alt'></i></th>
+                                    <th>Quantidade por Caixa <i class='bx bx-filter-alt'></i></th>
+                                    <th>Volume <i class='bx bx-filter-alt'></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="result-tbody">
+                                <!-- Conteúdo gerado via JS -->
+                            </tbody>
+                            <tfoot id="result-tfoot">
+                                <!-- Linha de Total gerada via JS -->
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: Configurações -->
+            <section id="config" class="tab-content">
+                <div class="header-section" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <h2>Meus Produtos Cadastrados</h2>
+                        <p>Cadastre os códigos (SKUs) para que o sistema reconheça automaticamente na geração.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-export-backup" class="btn-primary" style="background: var(--secondary); padding: 8px 15px; font-size: 0.9rem;">
+                            <i class='bx bx-export'></i> Exportar Backup
+                        </button>
+                        <button id="btn-import-backup" class="btn-primary" style="background: #10b981; padding: 8px 15px; font-size: 0.9rem;">
+                            <i class='bx bx-import'></i> Importar Backup
+                        </button>
+                        <input type="file" id="input-import-backup" accept=".json" style="display: none;">
+                    </div>
+                </div>
+
+                <div class="glass-card form-card">
+                    <form id="form-sku">
+                        <div class="input-group">
+                            <label>SKU (Código 1)</label>
+                            <input type="text" id="input-sku" placeholder="ex: Max_Innovar120_PR" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Nome do Produto</label>
+                            <input type="text" id="input-name" placeholder="Nome que vai na planilha..." required>
+                        </div>
+                        <div class="input-group">
+                            <label>Qtd por Caixa Padrão</label>
+                            <input type="number" id="input-qtd" placeholder="ex: 18" required min="1">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary"><i class='bx bx-plus'></i> Adicionar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="glass-card">
+                    <div class="table-responsive">
+                        <table class="config-table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Nome do Produto</th>
+                                    <th>Qtd / Caixa</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="config-tbody">
+                                <!-- Produtos carregados do localStorage -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            <!-- TAB: Imprimir Volumes -->
+            <section id="impressor" class="tab-content">
+                <div class="header-section">
+                    <h2>Imprimir Volumes</h2>
+                    <p>Carregue sua planilha e o PDF para iniciar a impressão volume a volume.</p>
+                </div>
+
+                <!-- Seção de Setup / Uploads -->
+                <div id="setup-section" class="glass-card fade-in" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap;">
+                        
+                        <div class="upload-box" style="flex: 1; min-width: 300px;">
+                            <label for="impressor-excel-upload" class="upload-label" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s; height: 100%;">
+                                <div class="icon" style="font-size: 2.5rem; margin-bottom: 10px;">📊</div>
+                                <span class="label-title" style="font-weight: 600; margin-bottom: 5px;">1. Selecione a Planilha (Excel)</span>
+                                <span class="file-name" id="impressor-excel-file-name" style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">Nenhum arquivo</span>
+                            </label>
+                            <input type="file" id="impressor-excel-upload" accept=".xlsx, .xls, .csv" hidden>
+                        </div>
+
+                        <div class="upload-box" style="flex: 1; min-width: 300px;">
+                            <label for="impressor-pdf-upload" class="upload-label" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s; height: 100%;">
+                                <div class="icon" style="font-size: 2.5rem; margin-bottom: 10px;">📄</div>
+                                <span class="label-title" style="font-weight: 600; margin-bottom: 5px;">2. Zip ou PDF com Volumes</span>
+                                <span class="file-name" id="impressor-pdf-file-name" style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">Nenhum arquivo</span>
+                            </label>
+                            <input type="file" id="impressor-pdf-upload" accept=".pdf, .zip" hidden>
+                        </div>
+
+                    </div>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button id="btn-start" class="btn-primary" style="width: 100%; padding: 15px; font-size: 1.1rem;" disabled>
+                            <i class='bx bx-play-circle'></i> Iniciar Processo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Seção de Impressão -->
+                <div id="print-section" class="glass-card" style="display: none; flex-direction: column; gap: 20px;">
+                    <div class="progress-bar" style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div id="progress-fill" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease;"></div>
+                    </div>
+                    
+                    <div class="status-indicator" style="text-align: right; font-size: 0.9rem; color: var(--text-muted);">
+                        Item <span id="current-index" style="color: var(--text-main); font-weight: bold;">1</span> de <span id="total-items" style="color: var(--text-main); font-weight: bold;">X</span>
+                    </div>
+
+                    <div class="product-info" style="background: rgba(0,0,0,0.2); padding: 30px; border-radius: 12px; text-align: center; border: 1px solid var(--border);">
+                        <div style="margin-bottom: 20px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Produto</span>
+                            <h2 id="product-name" style="font-size: 2rem; color: var(--text-main); margin-top: 5px;">Nome do Produto</h2>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Páginas / Volume</span>
+                            <h3 id="volume-value" style="font-size: 2.5rem; color: #10b981; margin-top: 5px;">1 - 1</h3>
+                        </div>
+                    </div>
+
+                    <div class="actions" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <button id="btn-prev" class="btn-secondary" style="flex: 1;"><i class='bx bx-left-arrow-alt'></i> Anterior</button>
+                        <button id="btn-print" class="btn-primary" style="flex: 2; background: #10b981;"><i class='bx bx-printer'></i> Imprimir Este Volume</button>
+                        <button id="btn-next" class="btn-secondary" style="flex: 1;">Próximo <i class='bx bx-right-arrow-alt'></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: Imprimir Produtos -->
+            <section id="imprimir-produtos" class="tab-content">
+                <div class="header-section">
+                    <h2>Imprimir Produtos</h2>
+                    <p>Cole o texto com a ordem dos SKUs e faça upload do PDF com todas as etiquetas geradas (sem separar).</p>
+                </div>
+
+                <!-- Seção de Setup / Uploads -->
+                <div id="setup-section-prod" class="glass-card fade-in" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap;">
+                        
+                        <!-- Lado Esquerdo: Origem dos Dados -->
+                        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 10px; color: var(--primary);">1. Dados (Texto OU Inbound PDF)</h4>
+                            <textarea id="shopee-input-prod" placeholder="Cole a lista de itens e quantidades aqui..." style="flex: 1; margin-bottom: 10px; min-height: 80px;"></textarea>
+                            
+                            <div style="display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--text-muted); font-size: 1rem; margin-bottom: 10px;">
+                                OU
+                            </div>
+                            
+                            <label for="inbound-pdf-upload" class="upload-label" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; background: rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s;">
+                                <div class="icon" style="font-size: 1.8rem; margin-bottom: 5px;">📊</div>
+                                <span class="label-title" style="font-weight: 600; font-size: 0.9rem; margin-bottom: 2px;">Subir NFe e ASN</span>
+                                <span class="file-name" id="inbound-pdf-file-name" style="font-size: 0.8rem; color: var(--text-muted); text-align: center;">Nenhum arquivo</span>
+                            </label>
+                            <input type="file" id="inbound-pdf-upload" accept=".pdf, .zip" hidden>
+                        </div>
+
+                        <!-- Lado Direito: PDF Base -->
+                        <div class="upload-box" style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+                            <h4 style="margin-bottom: 10px; color: var(--secondary);">2. PDF Base (Etiquetas)</h4>
+                            <label for="prod-pdf-upload" class="upload-label" style="flex: 1; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s; height: 100%;">
+                                <div class="icon" style="font-size: 2.5rem; margin-bottom: 10px;">📄</div>
+                                <span class="label-title" style="font-weight: 600; margin-bottom: 5px;">PDF de Etiquetas</span>
+                                <span class="file-name" id="prod-pdf-file-name" style="font-size: 0.85rem; color: var(--text-muted); text-align: center;">Nenhum arquivo</span>
+                            </label>
+                            <input type="file" id="prod-pdf-upload" accept=".pdf" hidden>
+                        </div>
+
+                    </div>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button id="btn-start-prod" class="btn-primary" style="width: 100%; padding: 15px; font-size: 1.1rem;" disabled>
+                            <i class='bx bx-play-circle'></i> Processar e Imprimir
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Seção de Impressão -->
+                <div id="print-section-prod" class="glass-card hidden" style="display: none; flex-direction: column; gap: 20px;">
+                    <div class="progress-bar" style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div id="progress-fill-prod" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease;"></div>
+                    </div>
+                    
+                    <div class="status-indicator" style="text-align: right; font-size: 0.9rem; color: var(--text-muted);">
+                        Produto <span id="current-index-prod" style="color: var(--text-main); font-weight: bold;">1</span> de <span id="total-items-prod" style="color: var(--text-main); font-weight: bold;">X</span>
+                    </div>
+
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <!-- Coluna 1: Info e Botões -->
+                        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 20px;">
+                            <div class="product-info" style="background: rgba(0,0,0,0.2); padding: 30px; border-radius: 12px; text-align: center; border: 1px solid var(--border); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                                <div style="margin-bottom: 20px;">
+                                    <span style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Produto LIDO DO TEXTO</span>
+                                    <h2 id="product-name-prod" style="font-size: 2rem; color: var(--text-main); margin-top: 5px; margin-bottom: 10px;">Nome do Produto</h2>
+                                    <span id="product-sku-prod" style="font-size: 1rem; color: var(--primary); background: rgba(255,107,107,0.1); padding: 5px 12px; border-radius: 6px; font-family: monospace; font-weight: bold; border: 1px solid rgba(255,107,107,0.2);">SKU: Desconhecido</span>
+                                </div>
+                                <div>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Páginas a Imprimir</span>
+                                    <h3 id="volume-value-prod" style="font-size: 2.5rem; color: #10b981; margin-top: 5px;">1 - 1</h3>
+                                </div>
+                            </div>
+                            <div class="actions" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                <button id="btn-prev-prod" class="btn-secondary" style="flex: 1;"><i class='bx bx-left-arrow-alt'></i> Anterior</button>
+                                <button id="btn-print-prod" class="btn-primary" style="flex: 2; background: #10b981;"><i class='bx bx-printer'></i> Imprimir Este Produto</button>
+                                <button id="btn-next-prod" class="btn-secondary" style="flex: 1;">Próximo <i class='bx bx-right-arrow-alt'></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Coluna 2: Preview da Etiqueta -->
+                        <div style="flex: 1; min-width: 300px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #333; height: 350px; position: relative;">
+                            <div style="position: absolute; top: 0; left: 0; width: 100%; background: var(--primary); color: white; text-align: center; font-size: 0.8rem; font-weight: bold; padding: 5px; z-index: 10;">
+                                PREVIEW DA 1ª ETIQUETA DESTE LOTE (CONFIRME SE É O PRODUTO CERTO)
+                            </div>
+                            <iframe id="prod-preview-iframe" style="width: 100%; height: 100%; border: none; padding-top: 25px;"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Mensagem aqui</div>
+
+    <!-- Bibliotecas para Gerar o Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- Bibliotecas Necessárias para o Impressor Automático -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    <!-- Firebase SDK (Compat v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <script src="script.js"></script>
+</body>
+</html>
