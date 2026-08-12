@@ -429,6 +429,18 @@ btnGenerateExcel.addEventListener('click', async () => {
         resultadosProcessados = [];
         const naoCadastrados = [];
 
+        // Função auxiliar para extrair valores reais (texto, fórmulas, richText)
+        const extractValue = (val) => {
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'object') {
+                if (val.result !== undefined) return val.result;
+                if (val.richText) return val.richText.map(rt => rt.text).join('');
+                if (val.text !== undefined) return val.text;
+                return '';
+            }
+            return val;
+        };
+
         // 1. Procurar as colunas corretas lendo o cabeçalho (linha 1)
         const headerRow = worksheet.getRow(1);
         let idColIndex = -1;
@@ -436,7 +448,9 @@ btnGenerateExcel.addEventListener('click', async () => {
 
         headerRow.eachCell((cell, colNumber) => {
             if (cell.value) {
-                const headerText = String(cell.value).toLowerCase();
+                // Extrai o texto real do cabeçalho para evitar problemas com formatação
+                const headerText = String(extractValue(cell.value)).toLowerCase().trim();
+                
                 // Procurar por variações do nome do SKU
                 if (headerText.includes('warehouse sku') || headerText.includes('mt sku id')) {
                     idColIndex = colNumber;
@@ -453,17 +467,6 @@ btnGenerateExcel.addEventListener('click', async () => {
         if (qtyColIndex === -1) qtyColIndex = 20;
 
         // 2. Extrair os dados usando os índices encontrados
-        const extractValue = (val) => {
-            if (val === null || val === undefined) return '';
-            if (typeof val === 'object') {
-                if (val.result !== undefined) return val.result;
-                if (val.richText) return val.richText.map(rt => rt.text).join('');
-                if (val.text !== undefined) return val.text;
-                return '';
-            }
-            return val;
-        };
-
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             
