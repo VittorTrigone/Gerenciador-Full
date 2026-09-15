@@ -88,30 +88,6 @@
                     <ul id="missing-skus-list" style="margin-left: 20px; font-size: 0.85rem; color: var(--text-muted);"></ul>
                 </div>
 
-                <!-- PENDÊNCIAS DA PLANILHA MURILO (vínculos e cadastro por SKU Olist) -->
-                <div id="pendencias-card" class="glass-card" style="display: none; background: rgba(245, 158, 11, 0.08); border-left: 4px solid #f59e0b; margin-bottom: 20px;">
-                    <h4 style="color: #f59e0b; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;"><i class='bx bx-link'></i> Pendências da Planilha Murilo</h4>
-                    <p id="pendencias-resumo" style="font-size: 0.9rem; margin-bottom: 10px;"></p>
-                    <div id="pendencias-vinculos-wrap" class="table-responsive" style="margin-bottom: 15px;">
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Anúncios sem SKU Olist (preencha o SKU):</p>
-                        <table class="config-table">
-                            <thead><tr><th>Anúncio (Shopee)</th><th>Model ID</th><th>SKU Olist</th></tr></thead>
-                            <tbody id="pendencias-vinculos-tbody"></tbody>
-                        </table>
-                    </div>
-                    <div id="pendencias-cadastro-wrap" class="table-responsive" style="margin-bottom: 15px;">
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">SKUs sem cadastro (nome e quantidade por caixa):</p>
-                        <table class="config-table">
-                            <thead><tr><th>SKU Olist</th><th>Nome do Produto</th><th>Qtd / Caixa</th></tr></thead>
-                            <tbody id="pendencias-cadastro-tbody"></tbody>
-                        </table>
-                    </div>
-                    <datalist id="skus-olist-datalist"></datalist>
-                    <button id="btn-salvar-pendencias" class="btn-primary" style="background: #f59e0b;">
-                        <i class='bx bx-save'></i> Salvar no banco e reprocessar
-                    </button>
-                </div>
-
                 <div id="results-container" class="glass-card result-card" style="display: none;">
                     <div class="result-header">
                         <h3>Planilha Gerada</h3>
@@ -131,7 +107,6 @@
                         <table id="result-table">
                             <thead>
                                 <tr>
-                                    <th>SKU Olist <i class='bx bx-filter-alt'></i></th>
                                     <th>Item <i class='bx bx-filter-alt'></i></th>
                                     <th>Confere <i class='bx bx-filter-alt'></i></th>
                                     <th>Quem Fez? <i class='bx bx-filter-alt'></i></th>
@@ -154,49 +129,10 @@
 
             <!-- TAB: Configurações -->
             <section id="config" class="tab-content">
-                <!-- Cadastro por SKU Olist (usado pela Planilha Murilo) -->
                 <div class="header-section" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                     <div>
-                        <h2>Cadastro por SKU Olist</h2>
-                        <p>Usado pela Planilha Murilo. O anúncio da Shopee (Model ID / Item ID) é ligado ao SKU do Olist, e o SKU traz o nome e a quantidade por caixa.</p>
-                        <p id="olist-stats" style="font-size: 0.9rem; margin-top: 6px;"></p>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button id="btn-import-anuncios" class="btn-primary" style="background: #f59e0b; padding: 8px 15px; font-size: 0.9rem;">
-                            <i class='bx bx-link'></i> Importar Anúncios do Olist (.xls)
-                        </button>
-                        <input type="file" id="input-import-anuncios" accept=".xls, .xlsx, .csv" style="display: none;">
-                        <button id="btn-import-cadastro-olist" class="btn-primary" style="background: #10b981; padding: 8px 15px; font-size: 0.9rem;">
-                            <i class='bx bx-import'></i> Importar Cadastro (.xlsx)
-                        </button>
-                        <input type="file" id="input-import-cadastro-olist" accept=".xlsx, .xls" style="display: none;">
-                        <button id="btn-export-cadastro-olist" class="btn-primary" style="background: var(--secondary); padding: 8px 15px; font-size: 0.9rem;">
-                            <i class='bx bx-export'></i> Baixar Cadastro (.xlsx)
-                        </button>
-                    </div>
-                </div>
-
-                <div class="glass-card" style="margin-bottom: 30px;">
-                    <input type="text" id="olist-busca" placeholder="Buscar por SKU ou nome..." style="width: 100%; margin-bottom: 15px;">
-                    <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-                        <table class="config-table">
-                            <thead>
-                                <tr>
-                                    <th>SKU Olist</th>
-                                    <th>Nome do Produto</th>
-                                    <th>Qtd / Caixa</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody id="olist-tbody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="header-section" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                    <div>
-                        <h2>Cadastro Antigo (por código Shopee)</h2>
-                        <p>Usado pelos Métodos 1 e 3. Na Planilha Murilo só serve de reserva para nome e quantidade por caixa.</p>
+                        <h2>Meus Produtos Cadastrados</h2>
+                        <p>Cadastre os códigos (SKUs) para que o sistema reconheça automaticamente na geração.</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="btn-export-backup" class="btn-primary" style="background: var(--secondary); padding: 8px 15px; font-size: 0.9rem;">

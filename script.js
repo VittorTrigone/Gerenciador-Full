@@ -21,11 +21,6 @@ let produtos = []; // Agora inicializa vazio, vai ser populado pelo Firebase
 let resultadosProcessados = [];
 let editingSku = null;
 
-// Vínculo Shopee -> SKU Olist (Planilha Murilo)
-let produtosOlist = {};   // sku -> { sku, nome, qtd_caixa }   (coleção "produtos_olist")
-let anunciosShopee = {};  // identificador (Model ID ou Item ID) -> { sku, titulo, origem }   (coleção "anuncios_shopee")
-let ultimaPlanilhaMurilo = null; // arquivo processado por último, para reprocessar depois de salvar pendências
-
 // ==========================================================================
 // Elementos DOM
 // ==========================================================================
@@ -61,44 +56,8 @@ const toastEl = document.getElementById('toast');
 document.addEventListener('DOMContentLoaded', async () => {
     // Busca dados do Firebase primeiro
     await loadProductsFromFirebase();
-    await loadVinculosFromFirebase();
     setupTabs();
 });
-
-// Busca o cadastro por SKU Olist e os vínculos de anúncios no Firebase
-async function loadVinculosFromFirebase() {
-    try {
-        const [snapProdutos, snapAnuncios] = await Promise.all([
-            db.collection('produtos_olist').get(),
-            db.collection('anuncios_shopee').get()
-        ]);
-        produtosOlist = {};
-        snapProdutos.forEach(doc => {
-            const d = doc.data();
-            produtosOlist[d.sku] = { sku: d.sku, nome: d.nome || '', qtd_caixa: d.qtd_caixa || 1 };
-        });
-        anunciosShopee = {};
-        snapAnuncios.forEach(doc => {
-            anunciosShopee[doc.id] = doc.data();
-        });
-        renderOlistTable();
-    } catch (error) {
-        console.error("Erro ao carregar vínculos do Firebase:", error);
-        showToast("Erro ao carregar o cadastro por SKU Olist: " + error.message, "error");
-    }
-}
-
-// Grava vários documentos em lotes (o Firestore aceita até 500 operações por lote)
-async function gravarEmLotes(colecao, docs) {
-    const TAMANHO_LOTE = 400;
-    for (let i = 0; i < docs.length; i += TAMANHO_LOTE) {
-        const batch = db.batch();
-        docs.slice(i, i + TAMANHO_LOTE).forEach(({ id, data }) => {
-            batch.set(db.collection(colecao).doc(id), data, { merge: true });
-        });
-        await batch.commit();
-    }
-}
 
 // Busca Produtos no Firebase
 async function loadProductsFromFirebase() {
@@ -321,7 +280,7 @@ inputImportBackup.addEventListener('change', async (e) => {
             
         } catch (error) {
             console.error(error);
-            showToast('Erro ao importar: ' + error.message, 'error');
+            showToast('Erro ao importar. O arquivo é inválido ou houve erro no banco.', 'error');
         } finally {
             btnImportBackup.innerHTML = "<i class='bx bx-import'></i> Importar Backup";
             btnImportBackup.disabled = false;
@@ -440,257 +399,20 @@ btnGenerate.addEventListener('click', () => {
 });
 
 // ==========================================================================
-// Cadastro por SKU Olist + Vínculo de Anúncios (Configurações)
+// Lógica do Parseador via Planilha (Excel Upload)
 // ==========================================================================
-const olistTbody = document.getElementById('olist-tbody');
-const olistBusca = document.getElementById('olist-busca');
-const olistStats = document.getElementById('olist-stats');
-const btnImportAnuncios = document.getElementById('btn-import-anuncios');
-const inputImportAnuncios = document.getElementById('input-import-anuncios');
-const btnImportCadastroOlist = document.getElementById('btn-import-cadastro-olist');
-const inputImportCadastroOlist = document.getElementById('input-import-cadastro-olist');
-const btnExportCadastroOlist = document.getElementById('btn-export-cadastro-olist');
-
-// Normaliza o texto de cabeçalho para achar colunas pelo nome
-const normalizarCabecalho = (txt) => String(txt || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
-// Lê a primeira aba de um .xls/.xlsx/.csv como lista de objetos (SheetJS)
-async function lerPlanilhaComoLinhas(file) {
-    const data = new Uint8Array(await file.arrayBuffer());
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-}
-
-// Acha o nome real da coluna a partir de uma lista de variações aceitas
-function acharColuna(linha, variacoes) {
-    const colunas = Object.keys(linha || {});
-    return colunas.find(c => variacoes.includes(normalizarCabecalho(c))) || null;
-}
-
-function escapeHtml(txt) {
-    return String(txt ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-}
-
-function renderOlistTable() {
-    if (!olistTbody) return;
-    const totalSkus = Object.keys(produtosOlist).length;
-    const totalAnuncios = Object.keys(anunciosShopee).length;
-    olistStats.textContent = `${totalAnuncios} anúncios vinculados · ${totalSkus} SKUs com cadastro`;
-
-    const termo = normalizarCabecalho(olistBusca.value);
-    const lista = Object.values(produtosOlist)
-        .filter(p => !termo || normalizarCabecalho(p.sku).includes(termo) || normalizarCabecalho(p.nome).includes(termo))
-        .sort((a, b) => a.nome.localeCompare(b.nome));
-
-    if (lista.length === 0) {
-        olistTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">Nenhum SKU cadastrado.</td></tr>';
+btnGenerateExcel.addEventListener('click', async () => {
+    if (produtos.length === 0) {
+        showToast('Cadastre ao menos 1 produto na aba Configurações!', 'error');
         return;
     }
 
-    olistTbody.innerHTML = lista.map(p => `
-        <tr>
-            <td>${escapeHtml(p.sku)}</td>
-            <td><input type="text" class="olist-nome" data-sku="${escapeHtml(p.sku)}" value="${escapeHtml(p.nome)}" style="width: 100%; padding: 0.4rem;"></td>
-            <td><input type="number" class="table-input olist-qtd" data-sku="${escapeHtml(p.sku)}" value="${p.qtd_caixa}" min="1"></td>
-            <td class="action-cell">
-                <button class="btn-icon olist-excluir" data-sku="${escapeHtml(p.sku)}" title="Excluir"><i class='bx bx-trash'></i></button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-if (olistBusca) olistBusca.addEventListener('input', renderOlistTable);
-
-// Edição direta na tabela: salva ao sair do campo
-if (olistTbody) {
-    olistTbody.addEventListener('change', async (e) => {
-        const sku = e.target.dataset.sku;
-        if (!sku || !produtosOlist[sku]) return;
-        const campo = e.target.classList.contains('olist-nome') ? 'nome' : 'qtd_caixa';
-        const valor = campo === 'nome' ? e.target.value.trim() : parseInt(e.target.value);
-        if (!valor) {
-            showToast('Valor inválido.', 'error');
-            renderOlistTable();
-            return;
-        }
-        try {
-            await db.collection('produtos_olist').doc(sku).set({ [campo]: valor }, { merge: true });
-            produtosOlist[sku][campo] = valor;
-            showToast(`${sku} atualizado!`);
-        } catch (error) {
-            console.error(error);
-            showToast('Erro ao salvar: ' + error.message, 'error');
-        }
-    });
-
-    olistTbody.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.olist-excluir');
-        if (!btn) return;
-        const sku = btn.dataset.sku;
-        if (!confirm(`Remover o cadastro do SKU ${sku}?\n(Os vínculos de anúncios continuam.)`)) return;
-        try {
-            await db.collection('produtos_olist').doc(sku).delete();
-            delete produtosOlist[sku];
-            renderOlistTable();
-            showToast('SKU removido!');
-        } catch (error) {
-            console.error(error);
-            showToast('Erro ao excluir: ' + error.message, 'error');
-        }
-    });
-}
-
-// Importar Anúncios do Olist: Identificador (Model ID ou Item ID) -> Produto (SKU)
-if (btnImportAnuncios) {
-    btnImportAnuncios.addEventListener('click', () => inputImportAnuncios.click());
-    inputImportAnuncios.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const textoOriginal = btnImportAnuncios.innerHTML;
-        try {
-            const linhas = await lerPlanilhaComoLinhas(file);
-            const colId = acharColuna(linhas[0], ['identificador']);
-            const colSku = acharColuna(linhas[0], ['produto (sku)', 'sku']);
-            const colTitulo = acharColuna(linhas[0], ['titulo']);
-            const colIntegracao = acharColuna(linhas[0], ['integracao']);
-            if (!colId || !colSku) throw new Error('Colunas "Identificador" e "Produto (SKU)" não encontradas.');
-
-            // Agrupa por Identificador: o mesmo anúncio com SKUs diferentes no Olist é conflito e fica de fora
-            const porId = {};
-            let ignorados = 0;
-            const integracoes = new Set();
-            linhas.forEach(l => {
-                const id = String(l[colId]).trim();
-                const sku = String(l[colSku]).trim();
-                if (!id || !sku || id.includes('/')) { ignorados++; return; }
-                if (colIntegracao) integracoes.add(String(l[colIntegracao]).trim());
-                porId[id] = porId[id] || { skus: new Set(), titulo: colTitulo ? String(l[colTitulo]).trim() : '' };
-                porId[id].skus.add(sku);
-            });
-
-            const novos = [], alterados = [], conflitos = [];
-            let iguais = 0;
-            Object.entries(porId).forEach(([id, { skus, titulo }]) => {
-                if (skus.size > 1) { conflitos.push(`  ${id}: ${[...skus].join(' / ')}`); return; }
-                const sku = [...skus][0];
-                const atual = anunciosShopee[id];
-                const doc = { id, data: { sku, titulo, origem: 'olist' } };
-                if (!atual) novos.push(doc);
-                else if (atual.sku !== sku) alterados.push({ ...doc, antes: atual.sku });
-                else iguais++;
-            });
-
-            const exemplosAlterados = alterados.slice(0, 5).map(a => `  ${a.id}: ${a.antes} → ${a.data.sku}`).join('\n');
-            const ok = confirm(
-                `Anúncios do Olist (${[...integracoes].join(', ') || 'integração não informada'})\n\n` +
-                `Novos: ${novos.length}\nAlterados: ${alterados.length}\nSem mudança: ${iguais}\nIgnorados (sem Identificador ou SKU): ${ignorados}\n` +
-                `Conflitos (mesmo anúncio com 2 SKUs — ficam de fora, corrigir no Olist): ${conflitos.length}\n` +
-                (conflitos.length ? `${conflitos.slice(0, 5).join('\n')}\n` : '') +
-                (exemplosAlterados ? `\nExemplos alterados:\n${exemplosAlterados}\n` : '') +
-                `\nGravar ${novos.length + alterados.length} vínculos no banco?`
-            );
-            if (!ok) return;
-
-            btnImportAnuncios.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> Gravando...";
-            btnImportAnuncios.disabled = true;
-            await gravarEmLotes('anuncios_shopee', [...novos, ...alterados]);
-            await loadVinculosFromFirebase();
-            showToast(`${novos.length + alterados.length} vínculos gravados!`);
-        } catch (error) {
-            console.error(error);
-            showToast('Erro ao importar anúncios: ' + error.message, 'error');
-        } finally {
-            btnImportAnuncios.innerHTML = textoOriginal;
-            btnImportAnuncios.disabled = false;
-            inputImportAnuncios.value = '';
-        }
-    });
-}
-
-// Importar Cadastro por SKU: colunas "SKU", "Nome", "Qtd por Caixa"
-if (btnImportCadastroOlist) {
-    btnImportCadastroOlist.addEventListener('click', () => inputImportCadastroOlist.click());
-    inputImportCadastroOlist.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const textoOriginal = btnImportCadastroOlist.innerHTML;
-        try {
-            const linhas = await lerPlanilhaComoLinhas(file);
-            const colSku = acharColuna(linhas[0], ['sku', 'sku olist', 'produto (sku)']);
-            const colNome = acharColuna(linhas[0], ['nome', 'nome do produto']);
-            const colQtd = acharColuna(linhas[0], ['qtd por caixa', 'qtd / caixa', 'quantidade por caixa', 'qtd_caixa']);
-            if (!colSku || !colNome || !colQtd) throw new Error('A planilha precisa das colunas "SKU", "Nome" e "Qtd por Caixa".');
-
-            const docs = [];
-            let novos = 0, alterados = 0, iguais = 0, invalidos = 0;
-            linhas.forEach(l => {
-                const sku = String(l[colSku]).trim();
-                const nome = String(l[colNome]).trim();
-                const qtd = parseInt(l[colQtd]);
-                if (!sku || !nome || isNaN(qtd) || qtd <= 0 || sku.includes('/')) { invalidos++; return; }
-                const atual = produtosOlist[sku];
-                if (!atual) novos++;
-                else if (atual.nome !== nome || atual.qtd_caixa !== qtd) alterados++;
-                else { iguais++; return; }
-                docs.push({ id: sku, data: { sku, nome, qtd_caixa: qtd } });
-            });
-
-            const ok = confirm(
-                `Cadastro por SKU Olist\n\nNovos: ${novos}\nAlterados: ${alterados}\nSem mudança: ${iguais}\nLinhas inválidas: ${invalidos}\n\n` +
-                `Gravar ${docs.length} SKUs no banco? (nada é apagado)`
-            );
-            if (!ok) return;
-
-            btnImportCadastroOlist.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> Gravando...";
-            btnImportCadastroOlist.disabled = true;
-            await gravarEmLotes('produtos_olist', docs);
-            await loadVinculosFromFirebase();
-            showToast(`${docs.length} SKUs gravados!`);
-        } catch (error) {
-            console.error(error);
-            showToast('Erro ao importar cadastro: ' + error.message, 'error');
-        } finally {
-            btnImportCadastroOlist.innerHTML = textoOriginal;
-            btnImportCadastroOlist.disabled = false;
-            inputImportCadastroOlist.value = '';
-        }
-    });
-}
-
-// Baixar Cadastro por SKU (serve de backup e de modelo para importar)
-if (btnExportCadastroOlist) {
-    btnExportCadastroOlist.addEventListener('click', () => {
-        const lista = Object.values(produtosOlist).sort((a, b) => a.sku.localeCompare(b.sku));
-        if (lista.length === 0) {
-            showToast('Não há SKUs para exportar.', 'error');
-            return;
-        }
-        const aoa = [['SKU', 'Nome', 'Qtd por Caixa'], ...lista.map(p => [p.sku, p.nome, p.qtd_caixa])];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Cadastro');
-        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'cadastro_sku_olist.xlsx');
-        showToast('Cadastro exportado!');
-    });
-}
-
-// ==========================================================================
-// Lógica do Parseador via Planilha Murilo (Excel Upload) - Método 2
-// ==========================================================================
-const pendenciasCard = document.getElementById('pendencias-card');
-const btnSalvarPendencias = document.getElementById('btn-salvar-pendencias');
-
-btnGenerateExcel.addEventListener('click', async () => {
     const file = excelUploadInput.files[0];
     if (!file) {
         showToast('Por favor, selecione uma planilha primeiro!', 'error');
         return;
     }
-    await processarPlanilhaMurilo(file);
-});
 
-async function processarPlanilhaMurilo(file) {
     if (typeof ExcelJS === 'undefined') {
         showToast('Biblioteca do Excel ainda não carregou!', 'error');
         return;
@@ -705,6 +427,7 @@ async function processarPlanilhaMurilo(file) {
         const worksheet = workbook.worksheets[0]; // Pega a primeira aba
 
         resultadosProcessados = [];
+        const naoCadastrados = [];
 
         // Função auxiliar para extrair valores reais (texto, fórmulas, richText)
         const extractValue = (val) => {
@@ -718,173 +441,86 @@ async function processarPlanilhaMurilo(file) {
             return val;
         };
 
-        // 1. Procurar as colunas pelo nome do cabeçalho (linha 1) — sem chute de posição
-        const col = {};
-        worksheet.getRow(1).eachCell((cell, colNumber) => {
-            const h = normalizarCabecalho(extractValue(cell.value));
-            if (h === 'item id') col.itemId = colNumber;
-            else if (h === 'model id') col.modelId = colNumber;
-            else if (h.includes('warehouse sku') || h.includes('mt sku id')) col.mtSku = colNumber;
-            else if (h === 'id sku do vendedor') col.skuVendedor = colNumber;
-            else if (h === 'item name') col.itemName = colNumber;
-            else if (h === 'model name') col.modelName = colNumber;
-            else if (h.includes('iremos mandar')) col.qtd = colNumber;
+        // 1. Procurar as colunas corretas lendo o cabeçalho (linha 1)
+        const headerRow = worksheet.getRow(1);
+        let idColIndex = -1;
+        let qtyColIndex = -1;
+
+        headerRow.eachCell((cell, colNumber) => {
+            if (cell.value) {
+                // Extrai o texto real do cabeçalho para evitar problemas com formatação
+                const headerText = String(extractValue(cell.value)).toLowerCase().trim();
+                
+                // Procurar por variações do nome do SKU
+                if (headerText.includes('warehouse sku') || headerText.includes('mt sku id')) {
+                    idColIndex = colNumber;
+                }
+                // Procurar por variações da quantidade
+                if (headerText.includes('iremos mandar')) {
+                    qtyColIndex = colNumber;
+                }
+            }
         });
 
-        const faltando = [];
-        if (!col.qtd) faltando.push('"Iremos Mandar"');
-        if (!col.itemId && !col.modelId) faltando.push('"Item ID" / "Model ID"');
-        if (faltando.length) {
-            showToast(`Coluna ${faltando.join(' e ')} não encontrada na planilha.`, 'error');
-            return;
-        }
+        // Fallback de segurança para caso a planilha não tenha os nomes exatos
+        if (idColIndex === -1) idColIndex = 5;
+        if (qtyColIndex === -1) qtyColIndex = 20;
 
-        const lerCelula = (row, colNumber) => colNumber ? String(extractValue(row.getCell(colNumber).value)).trim() : '';
-        const semVinculo = [];       // linhas sem SKU Olist resolvido
-        const skusSemCadastro = {};  // sku -> sugestão de nome/qtd
-
-        // 2. Extrair os dados e resolver o SKU: Model ID -> Item ID -> ID SKU do Vendedor
+        // 2. Extrair os dados usando os índices encontrados
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
-
+            
             // Pula as linhas que estão ocultas (filtradas) no Excel
             if (row.hidden) continue;
 
-            const qtd = parseInt(extractValue(row.getCell(col.qtd).value));
+            // Pega os valores das células, extraindo o resultado caso seja uma fórmula
+            let idValue = extractValue(row.getCell(idColIndex).value);
+            let qtyValue = extractValue(row.getCell(qtyColIndex).value);
+            
+            let id = String(idValue).trim();
+            // Pula se estiver vazio ou se for um erro do Excel como #N/D
+            if (!id || id === '#N/D' || id === '#N/A') continue; 
+            
+            // Extrai a quantidade (pode vir como número ou string)
+            let qtd = parseInt(qtyValue);
             if (isNaN(qtd) || qtd <= 0) continue; // Pula se não tiver quantidade válida
 
-            const itemId = lerCelula(row, col.itemId);
-            const modelId = lerCelula(row, col.modelId);
-            const mtSku = lerCelula(row, col.mtSku);
-            const skuVendedor = lerCelula(row, col.skuVendedor);
-            const nomeAnuncio = lerCelula(row, col.itemName);
-            const nomeVariacao = lerCelula(row, col.modelName);
-            if (!itemId && !modelId) continue;
+            let skuDesconhecido = null;
+            let prod = produtos.find(p => 
+                p.sku.trim().toLowerCase() === id.toLowerCase() ||
+                p.name.trim().toLowerCase() === id.toLowerCase()
+            );
 
-            const vinculo = anunciosShopee[modelId] || anunciosShopee[itemId];
-            let sku = vinculo ? vinculo.sku : '';
-            let origem = vinculo ? 'vinculo' : '';
-            if (!sku && skuVendedor) {
-                sku = skuVendedor;
-                origem = 'vendedor';
+            if (!prod) {
+                skuDesconhecido = id;
+                naoCadastrados.push({
+                    sku: skuDesconhecido,
+                    codigo: "N/A (Importação via Planilha)"
+                });
             }
 
-            // Reserva: cadastro antigo pelo código Shopee (Warehouse SKU)
-            const antigo = produtos.find(p => String(p.sku).trim() === mtSku);
-            const cadastro = sku ? produtosOlist[sku] : null;
-            const nomeVariacaoUtil = nomeVariacao && nomeVariacao !== nomeAnuncio ? ` ${nomeVariacao}` : '';
-            const nomeSugerido = antigo ? antigo.name : (vinculo && vinculo.titulo ? vinculo.titulo : nomeAnuncio + nomeVariacaoUtil);
-            const qtdCaixa = cadastro ? cadastro.qtd_caixa : (antigo ? antigo.qtd : 1);
-
-            if (!sku || origem === 'vendedor') {
-                semVinculo.push({ itemId, modelId, sugestao: sku, anuncio: nomeAnuncio + nomeVariacaoUtil });
-            }
-            if (sku && !cadastro && !skusSemCadastro[sku]) {
-                skusSemCadastro[sku] = { nome: nomeSugerido, qtd_caixa: antigo ? antigo.qtd : '' };
-            }
+            let caixas = prod ? Math.ceil(qtd / prod.qtd) : qtd; // Sem config, consideramos 1 un. por caixa = caixas igual a qtd
+            let finalName = prod ? prod.name : skuDesconhecido;
 
             resultadosProcessados.push({
                 id: Date.now() + Math.random(),
-                sku: sku,
-                item: cadastro ? cadastro.nome : nomeSugerido,
+                item: finalName,
                 quantidade: qtd,
-                caixas: Math.ceil(qtd / qtdCaixa),
-                qtdPorCaixa: qtdCaixa
+                caixas: caixas,
+                qtdPorCaixa: prod ? prod.qtd : 1
             });
         }
 
-        ultimaPlanilhaMurilo = file;
-
-        // Reutilizar a lógica de tratar Nomes Duplicados (o alerta antigo fica vazio neste método)
-        tratarNomesDuplicadosEGerarTabela([]);
-        renderPendencias(semVinculo, skusSemCadastro);
+        // Reutilizar a lógica de tratar Nomes Duplicados e Alerta
+        tratarNomesDuplicadosEGerarTabela(naoCadastrados);
 
     } catch (error) {
         console.error(error);
-        showToast('Erro ao ler a planilha: ' + error.message, 'error');
+        showToast('Erro ao ler a planilha. Verifique se é um arquivo válido.', 'error');
     } finally {
         btnGenerateExcel.innerHTML = "<i class='bx bx-file'></i> Processar Planilha Importada";
     }
-}
-
-function renderPendencias(semVinculo, skusSemCadastro) {
-    const skusCadastro = Object.keys(skusSemCadastro);
-    if (semVinculo.length === 0 && skusCadastro.length === 0) {
-        pendenciasCard.style.display = 'none';
-        return;
-    }
-
-    // Lista de SKUs conhecidos para autocompletar
-    const conhecidos = new Set([...Object.keys(produtosOlist), ...Object.values(anunciosShopee).map(a => a.sku)]);
-    document.getElementById('skus-olist-datalist').innerHTML = [...conhecidos].sort().map(s => `<option value="${escapeHtml(s)}">`).join('');
-
-    document.getElementById('pendencias-resumo').innerHTML =
-        `<strong>${semVinculo.length}</strong> anúncio(s) sem vínculo com o Olist e <strong>${skusCadastro.length}</strong> SKU(s) sem cadastro. ` +
-        `Confira, ajuste se precisar e clique em salvar — da próxima vez eles já saem certos.`;
-
-    document.getElementById('pendencias-vinculos-wrap').style.display = semVinculo.length ? 'block' : 'none';
-    document.getElementById('pendencias-vinculos-tbody').innerHTML = semVinculo.map(p => `
-        <tr>
-            <td>${escapeHtml(p.anuncio)}${p.sugestao ? '<br><small style="color:#f59e0b;">sugestão do "ID SKU do Vendedor" — confira</small>' : ''}</td>
-            <td>${escapeHtml(p.modelId || p.itemId)}</td>
-            <td><input type="text" class="pend-vinculo" list="skus-olist-datalist" data-id="${escapeHtml(p.modelId || p.itemId)}" value="${escapeHtml(p.sugestao)}" placeholder="SKU do Olist" style="width: 100%; min-width: 220px; padding: 0.4rem;"></td>
-        </tr>
-    `).join('');
-
-    document.getElementById('pendencias-cadastro-wrap').style.display = skusCadastro.length ? 'block' : 'none';
-    document.getElementById('pendencias-cadastro-tbody').innerHTML = skusCadastro.map(sku => `
-        <tr>
-            <td>${escapeHtml(sku)}</td>
-            <td><input type="text" class="pend-nome" data-sku="${escapeHtml(sku)}" value="${escapeHtml(skusSemCadastro[sku].nome)}" style="width: 100%; padding: 0.4rem;"></td>
-            <td><input type="number" class="table-input pend-qtd" data-sku="${escapeHtml(sku)}" value="${skusSemCadastro[sku].qtd_caixa}" min="1" placeholder="?"></td>
-        </tr>
-    `).join('');
-
-    pendenciasCard.style.display = 'block';
-}
-
-if (btnSalvarPendencias) {
-    btnSalvarPendencias.addEventListener('click', async () => {
-        const vinculos = [...document.querySelectorAll('.pend-vinculo')]
-            .map(inp => ({ id: inp.dataset.id, sku: inp.value.trim() }))
-            .filter(v => v.id && v.sku && !v.sku.includes('/'))
-            .map(v => ({ id: v.id, data: { sku: v.sku, titulo: '', origem: 'planilha' } }));
-
-        const cadastros = [];
-        const incompletos = [];
-        document.querySelectorAll('.pend-nome').forEach(inp => {
-            const sku = inp.dataset.sku;
-            const nome = inp.value.trim();
-            const qtd = parseInt(document.querySelector(`.pend-qtd[data-sku="${CSS.escape(sku)}"]`).value);
-            if (!nome || isNaN(qtd) || qtd <= 0) incompletos.push(sku);
-            else cadastros.push({ id: sku, data: { sku, nome, qtd_caixa: qtd } });
-        });
-
-        if (vinculos.length === 0 && cadastros.length === 0) {
-            showToast('Nada preenchido para salvar.', 'error');
-            return;
-        }
-        const aviso = incompletos.length ? `\n\n${incompletos.length} SKU(s) sem nome/qtd por caixa ficam de fora: ${incompletos.slice(0, 5).join(', ')}` : '';
-        if (!confirm(`Gravar no banco:\n\n${vinculos.length} vínculo(s) de anúncio\n${cadastros.length} SKU(s) no cadastro${aviso}`)) return;
-
-        const textoOriginal = btnSalvarPendencias.innerHTML;
-        btnSalvarPendencias.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> Gravando...";
-        btnSalvarPendencias.disabled = true;
-        try {
-            if (vinculos.length) await gravarEmLotes('anuncios_shopee', vinculos);
-            if (cadastros.length) await gravarEmLotes('produtos_olist', cadastros);
-            await loadVinculosFromFirebase();
-            showToast('Pendências salvas! Reprocessando...');
-            if (ultimaPlanilhaMurilo) await processarPlanilhaMurilo(ultimaPlanilhaMurilo);
-        } catch (error) {
-            console.error(error);
-            showToast('Erro ao salvar pendências: ' + error.message, 'error');
-        } finally {
-            btnSalvarPendencias.innerHTML = textoOriginal;
-            btnSalvarPendencias.disabled = false;
-        }
-    });
-}
+});
 
 // ==========================================================================
 // Lógica do Parseador via Inbound (PDF/ZIP) - Método 3
@@ -985,9 +621,6 @@ btnGenerateInbound.addEventListener('click', async () => {
 
 // Função extraída para reaproveitar no processamento de texto e de planilha
 function tratarNomesDuplicadosEGerarTabela(naoCadastradosArray) {
-    // Esconde as pendências da Planilha Murilo (o Método 2 mostra de novo logo depois)
-    pendenciasCard.style.display = 'none';
-
     // Tratar Nomes Duplicados (Adicionar 1, 2, 3...)
     const ocorrencias = {};
     resultadosProcessados.forEach(r => {
@@ -1049,8 +682,7 @@ function renderResultTable() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${escapeHtml(item.sku || '')}</td>
-            <td>${escapeHtml(item.item)}</td>
+            <td>${item.item}</td>
             <td></td>
             <td></td>
             <td>
@@ -1072,7 +704,6 @@ function renderResultTable() {
     if (tfoot) {
         tfoot.innerHTML = `
             <tr style="font-weight: bold; background: rgba(0,0,0,0.5);">
-                <td></td>
                 <td style="text-align: center;">Total</td>
                 <td></td>
                 <td></td>
@@ -1153,7 +784,6 @@ btnDownload.addEventListener('click', async () => {
 
         // Configurar as larguras e alinhamentos das colunas
         sheet.columns = [
-            { key: 'sku', width: 28 },
             { key: 'item', width: 45 },
             { key: 'confere', width: 12 },
             { key: 'quemFez', width: 15 },
@@ -1163,14 +793,14 @@ btnDownload.addEventListener('click', async () => {
             { key: 'volume', width: 15 }
         ];
 
-        // Centralizar todas as colunas exceto SKU (A) e Item (B)
-        for (let i = 3; i <= 8; i++) {
+        // Centralizar todas as colunas exceto a A
+        for (let i = 2; i <= 7; i++) {
             sheet.getColumn(i).alignment = { vertical: 'middle', horizontal: 'center' };
         }
         
-        // Quantidade (E/5) e Caixas (F/6) em Negrito
+        // Quantidade (D/4) e Caixas (E/5) em Negrito
+        sheet.getColumn(4).font = { bold: true };
         sheet.getColumn(5).font = { bold: true };
-        sheet.getColumn(6).font = { bold: true };
 
         // Pega as linhas do corpo (tbody) e cria a array de arrays
         const rows = document.querySelectorAll('#result-tbody tr');
@@ -1178,27 +808,25 @@ btnDownload.addEventListener('click', async () => {
 
         rows.forEach((row, i) => {
             const rowIndex = i + 2; // Cabeçalho é 1, dados começam na 2
-            const sku = row.cells[0].innerText.trim();
-            const item = row.cells[1].innerText;
-            const qtd = parseInt(row.cells[4].querySelector('input').value) || 0;
-            const caixas = parseInt(row.cells[5].querySelector('input').value) || 0;
+            const item = row.cells[0].innerText;
+            const qtd = parseInt(row.cells[3].querySelector('input').value) || 0;
+            const caixas = parseInt(row.cells[4].querySelector('input').value) || 0;
 
             // Valores pré-calculados que já estão na tela (evita precisar abrir o Excel para calcular a fórmula)
-            const qcValue = parseFloat(row.cells[6].querySelector('input').value) || 0;
-            const volumeValue = row.cells[7].innerText.trim();
+            const qcValue = parseFloat(row.cells[5].querySelector('input').value) || 0;
+            const volumeValue = row.cells[6].innerText.trim();
 
             // Fórmulas usando coordenadas dinâmicas e já injetando o resultado pré-calculado
             const formulaQtdCaixa = { 
-                formula: 'SUM(E' + rowIndex + '/F' + rowIndex + ')',
+                formula: 'SUM(D' + rowIndex + '/E' + rowIndex + ')',
                 result: qcValue
             };
             const formulaVolume = { 
-                formula: `SUM($F$1:F${rowIndex - 1})+1 & " - " & SUM($F$2:F${rowIndex})`,
+                formula: `SUM($E$1:E${rowIndex - 1})+1 & " - " & SUM($E$2:E${rowIndex})`,
                 result: volumeValue
             };
 
             tableRows.push([
-                sku,
                 item, 
                 '', 
                 '', 
@@ -1220,7 +848,6 @@ btnDownload.addEventListener('click', async () => {
                 showRowStripes: true,
             },
             columns: [
-                { name: 'SKU Olist', filterButton: true },
                 { name: 'Item', totalsRowLabel: 'Total', filterButton: true },
                 { name: 'Confere', filterButton: true },
                 { name: 'Quem Fez?', filterButton: true },
@@ -1252,15 +879,12 @@ btnDownload.addEventListener('click', async () => {
         });
         
         // Forçar o texto do Pedrão no rodapé caso a tabela do ExcelJS omita o totalsRowLabel
-        sheet.getCell('G' + totalRowIndex).value = 'Qualquer duvida consultar Pedrão ♥';
-        // O rótulo "Total" fica na coluna Item (B), não na SKU (A)
-        sheet.getCell('A' + totalRowIndex).value = '';
-        sheet.getCell('B' + totalRowIndex).value = 'Total';
+        sheet.getCell('F' + totalRowIndex).value = 'Qualquer duvida consultar Pedrão ♥';
 
         // Aplicar Bordas em todas as células da tabela (de A1 até a última coluna e linha)
         for (let rIdx = 1; rIdx <= totalRowIndex; rIdx++) {
             const rowRef = sheet.getRow(rIdx);
-            for (let cIdx = 1; cIdx <= 8; cIdx++) {
+            for (let cIdx = 1; cIdx <= 7; cIdx++) {
                 const cell = rowRef.getCell(cIdx);
                 cell.border = {
                     top: {style:'thin'},
@@ -1295,8 +919,8 @@ if (btnPrintDirect) {
         impItems = [];
         const rows = document.querySelectorAll('#result-tbody tr');
         rows.forEach(row => {
-            const item = row.cells[1].innerText.trim();
-            const volume = row.cells[7].innerText.trim();
+            const item = row.cells[0].innerText.trim();
+            const volume = row.cells[6].innerText.trim();
             if (item && volume) {
                 impItems.push({
                     product: item,
