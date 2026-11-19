@@ -568,14 +568,7 @@ btnGenerateInbound.addEventListener('click', async () => {
                 let blockClean = row.textBlock.toLowerCase().replace(/\s+/g, ' ');
                 let blockNoSpace = blockClean.replace(/ /g, '');
                 
-                let matchedProd = produtos.find(p => {
-                    let skuClean = p.sku.toLowerCase().trim();
-                    let nameClean = p.name.toLowerCase().trim();
-                    let skuNoSpace = skuClean.replace(/ /g, '');
-                    return blockClean.includes(skuClean) || 
-                           blockClean.includes(nameClean) || 
-                           (skuNoSpace.length > 3 && blockNoSpace.includes(skuNoSpace));
-                });
+                let matchedProd = acharProdutoInbound(row);
                 
                 let fallback = row.firstTokens.length > 1 ? row.firstTokens[1] : row.firstTokens[0];
                 
@@ -1427,15 +1420,7 @@ btnStartProd.addEventListener('click', async () => {
                 let blockClean = row.textBlock.toLowerCase().replace(/\s+/g, ' ');
                 let blockNoSpace = blockClean.replace(/ /g, '');
                 
-                let matchedProd = produtos.find(p => {
-                    let skuClean = p.sku.toLowerCase().trim();
-                    let nameClean = p.name.toLowerCase().trim();
-                    let skuNoSpace = skuClean.replace(/ /g, '');
-                    
-                    return blockClean.includes(skuClean) || 
-                           blockClean.includes(nameClean) || 
-                           (skuNoSpace.length > 3 && blockNoSpace.includes(skuNoSpace));
-                });
+                let matchedProd = acharProdutoInbound(row);
                 
                 let skuFinal = matchedProd ? matchedProd.sku : row.firstTokens[1] || 'Desconhecido';
                 let nameFinal = matchedProd ? matchedProd.name : row.firstTokens[1] || 'Desconhecido';
@@ -1852,4 +1837,29 @@ async function parseInboundPDF(pdfBytes) {
     }
 
     return parsedRows;
+}
+
+// Acha o produto cadastrado de uma linha do Inbound.
+// 1º o ID do SKU do Armazém (ex.: 29515192198_421545457621); senão o maior SKU/nome contido no bloco,
+// para "Mini Torno CINZA" não perder para "Mini Torno".
+function acharProdutoInbound(row) {
+    const blockClean = row.textBlock.toLowerCase().replace(/\s+/g, ' ');
+    const blockNoSpace = blockClean.replace(/ /g, '');
+    // ID do SKU do Armazém cadastrado como SKU: procura dentro do bloco (o PDF quebra o ID em linhas
+    // e às vezes cola o nº da linha na frente, então não dá pra confiar só no regex de skuShopee)
+    const porId = produtos.find(p => {
+        const id = p.sku.replace(/\s/g, '');
+        return /^\d+_\d+$/.test(id) && blockNoSpace.includes(id);
+    });
+    if (porId) return porId;
+    let melhor = null, tam = 0;
+    for (const p of produtos) {
+        const sku = p.sku.toLowerCase().trim(), nome = p.name.toLowerCase().trim(), skuNS = sku.replace(/ /g, '');
+        const t = Math.max(
+            sku && blockClean.includes(sku) ? sku.length : 0,
+            nome && blockClean.includes(nome) ? nome.length : 0,
+            skuNS.length > 3 && blockNoSpace.includes(skuNS) ? skuNS.length : 0);
+        if (t > tam) { melhor = p; tam = t; }
+    }
+    return melhor;
 }
